@@ -13,36 +13,37 @@ void setup() {
   pinMode(LED_PIN, OUTPUT);
   //serial init
   Serial.begin(9600);  //ustawiamy przepustowość łącza szeregowego
-  Serial.setTimeout(10); //ustawiamy czas utracenia połączaniaSERIAL, jest bardzo niski bo nie działamy synchronicznie
-  delay(100);            //migamy ledem na płytce sygnalizując że płytka się uruchomiła
-  Serial.print("Arduino Gotowe\n");
+  Serial.setTimeout(10);
   delay(100);
+  Serial.print("Arduino Gotowe1\n");
+  blinkLED(10,50);
 }
 
 void loop() {
- //Check to see if anything is available in the serial receive buffer
- 
+  blinkLED(1,100);
+
 }
 
-char * ReciveSerialMessage(){
-  while (Serial.available() > 0)
- {
-   static char message[MAX_MESSAGE_LENGTH];
-   static unsigned int message_pos = 0;
-   char inByte = Serial.read();
-   if ( inByte != '\n' && (message_pos < MAX_MESSAGE_LENGTH - 1) )
-   {
-     message[message_pos] = inByte;
-     message_pos++;
-   }
-   else
-   {
-     message[message_pos] = '\0';
-     return message;
-     message_pos = 0;
-   }
- }
-}
+// char* ReciveSerialMessage(){
+//   static char message[MAX_MESSAGE_LENGTH];
+//   static unsigned int message_pos = 0;
+//   while (Serial.available() > 0)
+//  {
+//    char inByte = Serial.read();
+//    if ( inByte != '\n' && (message_pos < MAX_MESSAGE_LENGTH - 1) )
+//    {
+//      message[message_pos] = inByte;
+//      message_pos++;
+//    }
+//    else
+//    {
+//      message[message_pos] = '\0';
+//      message_pos = 0;
+//      return message;
+//    }
+//  }
+//  return 0;
+// }
 
 void blinkLED(byte numBlinks, int onOffTime)
 { //funkcja miganie leda na płytce - do debugowania
