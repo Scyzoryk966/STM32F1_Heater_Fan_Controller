@@ -3,8 +3,17 @@
 
 #define LED_PIN PB12
 
-//Definicja funkcji
-char * ReciveSerialMessage();
+//Define variables
+const uint8_t headerData[3] = {'<', '-', '-'};
+bool enable = true;
+char testData[255];
+unsigned long currTime = millis();
+unsigned long prevTime = 0;
+int blinkTime = 0;
+//Define functions
+void reciveSerialData(bool* enable, char* recivedData);
+bool waitForUserInputTimeout(bool* enable);
+bool asyncPeriodBool(unsigned long period);
 void blinkLED(byte numBlinks, int onOffTime);
 //---
 
@@ -12,38 +21,106 @@ void setup() {
   //Set pin modes
   pinMode(LED_PIN, OUTPUT);
   //serial init
-  Serial.begin(9600);  //ustawiamy przepustowość łącza szeregowego
+  Serial.begin(115200);  //serial baud
   Serial.setTimeout(10);
-  delay(100);
-  Serial.print("Arduino Gotowe1\n");
+  delay(1000);
   blinkLED(10,50);
+  Serial.print("Arduino Gotowe\n"); //to nie działa nwm czemu :<
+  blinkLED(5,100); 
+  digitalWrite(LED_PIN, HIGH);
 }
 
 void loop() {
-  blinkLED(1,100);
+  reciveSerialData(&enable, testData);
+  if(testData[0] != 0)
+    Serial.println(testData);
+  memset(testData,0,sizeof(*testData));
 
 }
 
-// char* ReciveSerialMessage(){
-//   static char message[MAX_MESSAGE_LENGTH];
-//   static unsigned int message_pos = 0;
-//   while (Serial.available() > 0)
-//  {
-//    char inByte = Serial.read();
-//    if ( inByte != '\n' && (message_pos < MAX_MESSAGE_LENGTH - 1) )
-//    {
-//      message[message_pos] = inByte;
-//      message_pos++;
-//    }
-//    else
-//    {
-//      message[message_pos] = '\0';
-//      message_pos = 0;
-//      return message;
-//    }
-//  }
-//  return 0;
-// }
+void reciveSerialData(bool* enable, char* recivedData)
+{
+  if(Serial.available() > 0 && *enable)
+  {
+    uint8_t b = Serial.read();
+    bool similarToHeader = false;
+    if (b == headerData[0]) // compare to header
+    {
+      similarToHeader = true;
+      for (unsigned int i = 1; similarToHeader && (i < sizeof(headerData)); i++)
+      {
+        if(!waitForUserInputTimeout(enable))
+        {
+          memset(testData,0,sizeof(*testData));
+          return;
+        } 
+        b = Serial.read();
+        if (b != headerData[i])
+        {
+          // jeżeli któryś bit nie zgadza się z nagłowkiem warunek nie zostaje spełniony
+          similarToHeader = false;
+          Serial.println("Header not recognized...");
+          }
+        }
+      }
+      else
+      {
+        Serial.println("Header not recognized...");
+        Serial.read();
+        return;
+      }
+      if (similarToHeader)
+      {
+        Serial.println("Header found!!!");
+        int dataCounter = 0;
+        do
+        {
+          if(!waitForUserInputTimeout(enable))
+          {
+            memset(testData,0,sizeof(*testData));
+            return;
+          } 
+          b = Serial.read();
+          recivedData[dataCounter] = b;
+          dataCounter++;
+          Serial.println(dataCounter);
+        } while (b!='\n');
+      }
+  }
+}
+
+bool waitForUserInputTimeout(bool* enable)
+{
+  int timeout = 1;
+  while (Serial.available() == 0 && *enable)//w8 for serial data
+  {
+    if (asyncPeriodBool(5000)){
+      Serial.print("Wait for user input... Retry:");
+      Serial.println(timeout);
+      timeout++;
+    }
+    if(timeout > 3)
+    {
+      Serial.println("Data input timeout...");
+      return false;
+    }
+  }
+  return true;
+}
+
+bool asyncPeriodBool(unsigned long period)
+{
+  currTime = millis();
+  if (currTime - prevTime >= period)
+  {
+    prevTime = currTime;
+    return true;
+  }
+  else
+  {
+    return false;
+  }
+}
 
 void blinkLED(byte numBlinks, int onOffTime)
 { //funkcja miganie leda na płytce - do debugowania
