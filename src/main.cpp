@@ -7,12 +7,13 @@
 const uint8_t headerData[3] = {'<', '-', '-'};
 bool enable = true;
 char testData[255];
+//period related variables
 unsigned long currTime = millis();
 unsigned long prevTime = 0;
-int blinkTime = 0;
 //Define functions
 void reciveSerialData(bool* enable, char* recivedData);
 bool waitForUserInputTimeout(bool* enable);
+void serialWriteHelp();
 bool asyncPeriodBool(unsigned long period);
 void blinkLED(byte numBlinks, int onOffTime);
 //---
@@ -24,14 +25,18 @@ void setup() {
   Serial.begin(115200);  //serial baud
   Serial.setTimeout(10);
   delay(1000);
-  blinkLED(10,50);
-  Serial.print("Arduino Gotowe\n"); //to nie działa nwm czemu :<
+  Serial.print("Arduino READY\n");
+  serialWriteHelp();
   blinkLED(5,100); 
   digitalWrite(LED_PIN, HIGH);
 }
 
 void loop() {
   reciveSerialData(&enable, testData);
+  if(testData[0] == 'H')
+  {
+    serialWriteHelp();
+  }
   if(testData[0] != 0)
     Serial.println(testData);
   memset(testData,0,sizeof(*testData));
@@ -51,7 +56,7 @@ void reciveSerialData(bool* enable, char* recivedData)
       {
         if(!waitForUserInputTimeout(enable))
         {
-          memset(testData,0,sizeof(*testData));
+          memset(recivedData,0,sizeof(*recivedData));
           return;
         } 
         b = Serial.read();
@@ -59,16 +64,10 @@ void reciveSerialData(bool* enable, char* recivedData)
         {
           // jeżeli któryś bit nie zgadza się z nagłowkiem warunek nie zostaje spełniony
           similarToHeader = false;
-          Serial.println("Header not recognized...");
           }
         }
       }
-      else
-      {
-        Serial.println("Header not recognized...");
-        Serial.read();
-        return;
-      }
+
       if (similarToHeader)
       {
         Serial.println("Header found!!!");
@@ -77,14 +76,20 @@ void reciveSerialData(bool* enable, char* recivedData)
         {
           if(!waitForUserInputTimeout(enable))
           {
-            memset(testData,0,sizeof(*testData));
+            memset(recivedData,0,sizeof(*recivedData));
             return;
           } 
           b = Serial.read();
           recivedData[dataCounter] = b;
           dataCounter++;
-          Serial.println(dataCounter);
+          Serial.print((char)b);
         } while (b!='\n');
+      }
+      else
+      {
+        Serial.println("Header not recognized...Send \"<--\" + \"H\" for help.");
+        Serial.read();
+        return;
       }
   }
 }
@@ -106,6 +111,16 @@ bool waitForUserInputTimeout(bool* enable)
     }
   }
   return true;
+}
+
+void serialWriteHelp()
+{
+  Serial.print("To send message via Serial port:\n");
+  Serial.print("\t1. Write header: \"<--\" to serial buffer\n");
+  Serial.print("\t2. Send date within 15 seconds window between characters\n");
+  Serial.print("\t3. End data stream by sending \\n characters aka [ENTER]\n");
+  Serial.print("Serial comands:");
+  Serial.print("\t1. Send HEADER + \"H\" - brings up this message");
 }
 
 bool asyncPeriodBool(unsigned long period)
