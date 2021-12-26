@@ -11,41 +11,42 @@ char testData[255];
 unsigned long currTime = millis();
 unsigned long prevTime = 0;
 //Define functions
-void reciveSerialData(bool* enable, char* recivedData);
-bool waitForUserInputTimeout(bool* enable);
+void reciveSerialData(bool *enable, char *recivedData);
+bool waitForUserInputTimeout(bool *enable);
 void serialWriteHelp();
 bool asyncPeriodBool(unsigned long period);
 void blinkLED(byte numBlinks, int onOffTime);
 //---
 
-void setup() {
+void setup()
+{
   //Set pin modes
   pinMode(LED_PIN, OUTPUT);
   //serial init
-  Serial.begin(115200);  //serial baud
+  Serial.begin(115200); //serial baud
   Serial.setTimeout(10);
   delay(1000);
   Serial.print("Arduino READY\n");
   serialWriteHelp();
-  blinkLED(5,100); 
+  blinkLED(5, 100);
   digitalWrite(LED_PIN, HIGH);
 }
 
-void loop() {
+void loop()
+{
   reciveSerialData(&enable, testData);
-  if(testData[0] == 'H')
+  if (testData[0] == 'H' || testData[0] == 'h')
   {
     serialWriteHelp();
   }
-  if(testData[0] != 0)
+  if (testData[0] != 0)
     Serial.println(testData);
-  memset(testData,0,sizeof(*testData));
-
+  memset(testData, 0, sizeof(*testData));
 }
 
-void reciveSerialData(bool* enable, char* recivedData)
+void reciveSerialData(bool *enable, char *recivedData)
 {
-  if(Serial.available() > 0 && *enable)
+  if (Serial.available() > 0 && *enable)
   {
     uint8_t b = Serial.read();
     bool similarToHeader = false;
@@ -54,57 +55,58 @@ void reciveSerialData(bool* enable, char* recivedData)
       similarToHeader = true;
       for (unsigned int i = 1; similarToHeader && (i < sizeof(headerData)); i++)
       {
-        if(!waitForUserInputTimeout(enable))
+        if (!waitForUserInputTimeout(enable))
         {
-          memset(recivedData,0,sizeof(*recivedData));
+          memset(recivedData, 0, sizeof(*recivedData));
           return;
-        } 
+        }
         b = Serial.read();
         if (b != headerData[i])
         {
-          // jeżeli któryś bit nie zgadza się z nagłowkiem warunek nie zostaje spełniony
-          similarToHeader = false;
-          }
+          similarToHeader = false; // jeżeli któryś bit nie zgadza się z nagłowkiem warunek nie zostaje spełniony
         }
       }
+    }
 
-      if (similarToHeader)
+    if (similarToHeader)
+    {
+      Serial.println("Header found!!!");
+      int dataCounter = 0;
+      do
       {
-        Serial.println("Header found!!!");
-        int dataCounter = 0;
-        do
+        if (!waitForUserInputTimeout(enable))
         {
-          if(!waitForUserInputTimeout(enable))
-          {
-            memset(recivedData,0,sizeof(*recivedData));
-            return;
-          } 
-          b = Serial.read();
-          recivedData[dataCounter] = b;
-          dataCounter++;
-          Serial.print((char)b);
-        } while (b!='\n');
-      }
-      else
-      {
-        Serial.println("Header not recognized...Send \"<--\" + \"H\" for help.");
-        Serial.read();
-        return;
-      }
+          memset(recivedData, 0, sizeof(*recivedData));
+          return;
+        }
+        b = Serial.read();
+        recivedData[dataCounter] = b;
+        dataCounter++;
+        Serial.print((char)b);
+      } while (b != '\n');
+    }
+    else
+    {
+      Serial.println("Header not recognized...Send \"<--\" + \"H\" for help.\n");
+      Serial.read();
+      return;
+    }
   }
 }
 
-bool waitForUserInputTimeout(bool* enable)
+bool waitForUserInputTimeout(bool *enable)
 {
   int timeout = 1;
-  while (Serial.available() == 0 && *enable)//w8 for serial data
+  prevTime = millis();
+  while (Serial.available() == 0 && *enable) //w8 for serial data
   {
-    if (asyncPeriodBool(5000)){
+    if (asyncPeriodBool(5000))
+    {
       Serial.print("Wait for user input... Retry:");
       Serial.println(timeout);
       timeout++;
     }
-    if(timeout > 3)
+    if (timeout > 3)
     {
       Serial.println("Data input timeout...");
       return false;
@@ -119,8 +121,8 @@ void serialWriteHelp()
   Serial.print("\t1. Write header: \"<--\" to serial buffer\n");
   Serial.print("\t2. Send date within 15 seconds window between characters\n");
   Serial.print("\t3. End data stream by sending \\n characters aka [ENTER]\n");
-  Serial.print("Serial comands:");
-  Serial.print("\t1. Send HEADER + \"H\" - brings up this message");
+  Serial.print("Serial comands:\n");
+  Serial.print("\t1. Send HEADER + \"H\" - brings up this message\n");
 }
 
 bool asyncPeriodBool(unsigned long period)
@@ -138,7 +140,7 @@ bool asyncPeriodBool(unsigned long period)
 }
 
 void blinkLED(byte numBlinks, int onOffTime)
-{ //funkcja miganie leda na płytce - do debugowania
+{ //classy Blink with delay
   for (byte n = 0; n < numBlinks; n++)
   {
     digitalWrite(LED_PIN, HIGH);
