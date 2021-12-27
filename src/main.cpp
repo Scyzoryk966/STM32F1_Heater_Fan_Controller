@@ -2,6 +2,8 @@
 #define MAX_MESSAGE_LENGTH 255
 
 #define LED_PIN PB12
+#define FAN_PWM PB7
+#define ANALOG_IN PA7
 
 //Define variables
 const uint8_t headerData[3] = {'<', '-', '-'};
@@ -22,6 +24,8 @@ void setup()
 {
   //Set pin modes
   pinMode(LED_PIN, OUTPUT);
+  pinMode(FAN_PWM, PWM);
+  pinMode(ANALOG_IN, INPUT);
   //serial init
   Serial.begin(115200); //serial baud
   Serial.setTimeout(10);
