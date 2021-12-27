@@ -38,6 +38,7 @@ void loop()
   if (testData[0] == 'H' || testData[0] == 'h')
   {
     serialWriteHelp();
+    //XDD
   }
   if (testData[0] != 0)
     Serial.println(testData);
