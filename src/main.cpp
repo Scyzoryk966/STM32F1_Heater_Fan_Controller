@@ -6,15 +6,19 @@
 #define ANALOG_IN PA7
 
 //Define variables
-const uint8_t headerData[3] = {'<', '-', '-'};
+//const uint8_t headerData[3] = {'<', '-', '-'};
+const uint8_t headerData[3] = {'`'}; // change for testing purposes
 bool enable = true;
-char testData[255];
+char recivedData[255];
+int pwmFanSpeed = 65535; //0 to 65535 (PWM)
+int tempResult = 0;
 //period related variables
 unsigned long currTime = millis();
 unsigned long prevTime = 0;
 //Define functions
 void reciveSerialData(bool *enable, char *recivedData);
 bool waitForUserInputTimeout(bool *enable);
+void changeFanSpeed(int speed);
 void serialWriteHelp();
 bool asyncPeriodBool(unsigned long period);
 void blinkLED(byte numBlinks, int onOffTime);
@@ -38,15 +42,21 @@ void setup()
 
 void loop()
 {
-  reciveSerialData(&enable, testData);
-  if (testData[0] == 'H' || testData[0] == 'h')
+  pwmWrite(FAN_PWM, pwmFanSpeed);        
+
+  reciveSerialData(&enable, recivedData);
+  if (recivedData[0] == 'H' || recivedData[0] == 'h')
   {
     serialWriteHelp();
-    //XDD
+  } 
+  else if (recivedData[0] == 'S' || recivedData[0] == 's')
+  {
+    changeFanSpeed(atoi(recivedData + 1)); //recivedData + 1 = same string witout first character
   }
-  if (testData[0] != 0)
-    Serial.println(testData);
-  memset(testData, 0, sizeof(*testData));
+  
+  if (recivedData[0] != 0)
+    Serial.println(recivedData);
+  memset(recivedData, 0, sizeof(*recivedData));
 }
 
 void reciveSerialData(bool *enable, char *recivedData)
@@ -120,6 +130,19 @@ bool waitForUserInputTimeout(bool *enable)
   return true;
 }
 
+void changeFanSpeed(int speed)
+{
+  int tempSpeed = speed;
+  if(speed > 100)
+    tempSpeed = 100;
+  else if(speed < 0)
+    tempSpeed = 0;
+  Serial.print("Speed was changed to: ");
+  Serial.print(speed, DEC);
+  Serial.print("%.\n");
+  pwmFanSpeed = map(tempSpeed, 0, 100, 0, 65535);
+}
+
 void serialWriteHelp()
 {
   Serial.print("To send message via Serial port:\n");
@@ -128,6 +151,7 @@ void serialWriteHelp()
   Serial.print("\t3. End data stream by sending \\n characters aka [ENTER]\n");
   Serial.print("Serial comands:\n");
   Serial.print("\t1. Send HEADER + \"H\" - brings up this message\n");
+  Serial.print("\t2. Send HEADER + \"S + Speed\" [0-100] - sets fan speed\n");
 }
 
 bool asyncPeriodBool(unsigned long period)
