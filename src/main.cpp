@@ -9,9 +9,8 @@
 #define BUTTON PB9
 #define ANALOG_IN PA7
 
-#define DHTPIN PB8
-
-#define DHTTYPE    DHT22     // DHT 22 (AM2302)
+#define DHTPIN  PB8
+#define DHTTYPE DHT22     // DHT 22 (AM2302)
 
 //Define variables
 //const uint8_t headerData[3] = {'<', '-', '-'};
@@ -22,6 +21,8 @@ int pwmFanSpeed = 0; //0 to 65535 (PWM)
 int tempResult = 0;
 float actualTemp = 0;
 int buttonValue = 0;
+int actualFanSpeed = 0;
+int lastFanSpeed = 0;
 //DHT temperature and humidity sensor instence
 DHT_Unified dht(DHTPIN, DHTTYPE);
 uint32_t delayMS;
@@ -31,7 +32,7 @@ unsigned long prevTime = 0;
 //Define functions
 void reciveSerialData(bool *enable, char *recivedData);
 bool waitForUserInputTimeout(bool *enable);
-void changeFanSpeed(int speed);
+int changeFanSpeed(int speed);
 void serialWriteHelp();
 bool asyncPeriodBool(unsigned long period);
 void blinkLED(byte numBlinks, int onOffTime);
@@ -59,24 +60,27 @@ void setup()
   //Init LED confirmation
   blinkLED(5, 100);
   digitalWrite(LED_PIN, HIGH);
+  actualFanSpeed = changeFanSpeed(40);
 }
 
 void loop()
 {
   pwmWrite(FAN_PWM, pwmFanSpeed);   
-  
+  //---------------------------------------------------
   if(buttonValue == LOW && digitalRead(BUTTON) == HIGH){      //Button click with positive edge - move to function
-    Serial.println("Button clicked!\n");delay(10);    
+    Serial.println("Button clicked!\n");delay(10);
+    actualFanSpeed = changeFanSpeed(actualFanSpeed + 10);
   }
   buttonValue = digitalRead(BUTTON);
 
+  //---------------------------------------------------
   if(asyncPeriodBool(delayMS)){
     actualTemp = DHTGetTemp();
     Serial.println(actualTemp);delay(10);
   }
-
+  //---------------------------------------------------
   reciveSerialData(&enable, recivedData);
-
+  
   if (recivedData[0] == 'H' || recivedData[0] == 'h')
   {
     serialWriteHelp();
@@ -162,17 +166,19 @@ bool waitForUserInputTimeout(bool *enable)
   return true;
 }
 
-void changeFanSpeed(int speed)
+int changeFanSpeed(int speed)
 {
   int tempSpeed = speed;
   if(speed > 100)
-    tempSpeed = 100;
+    tempSpeed = 0;
   else if(speed < 0)
     tempSpeed = 0;
+
   Serial.print("Speed was changed to: ");
-  Serial.print(speed, DEC);
+  Serial.print(tempSpeed, DEC);
   Serial.print("%.\n");
   pwmFanSpeed = map(tempSpeed, 0, 100, 0, 65535);
+  return tempSpeed;
 }
 
 void serialWriteHelp()
