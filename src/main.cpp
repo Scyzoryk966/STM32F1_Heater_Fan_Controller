@@ -7,7 +7,7 @@
 
 //Define variables
 //const uint8_t headerData[3] = {'<', '-', '-'};
-const uint8_t headerData[3] = {'`'}; // change for testing purposes
+const uint8_t headerData[3] = {'`','`','`'}; // change for testing purposes
 bool enable = true;
 char recivedData[255];
 int pwmFanSpeed = 65535; //0 to 65535 (PWM)
