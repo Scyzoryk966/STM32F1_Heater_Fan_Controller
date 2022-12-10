@@ -1,5 +1,5 @@
 #include <Arduino.h>
-
+#include <EEPROM.h>
 #include <DHT_U.h>
 
 #define MAX_MESSAGE_LENGTH 255
@@ -17,29 +17,35 @@
 const uint8_t headerData[3] = {'`','`','`'}; // change for testing purposes
 bool enable = true;
 char recivedData[255];
-int pwmFanSpeed = 0; //0 to 65535 (PWM)
+int pwmFanSpeed = 65535; //0 to 65535 (PWM)
 int tempResult = 0;
-float actualTemp = 0;
 int buttonValue = 0;
-int actualFanSpeed = 0;
+//Change fan speed variables
+bool changeFanSpeedFlag = false;
+int savedFanSpeed = EEPROM.read(0);
+int actualFanSpeed = savedFanSpeed;
 int lastFanSpeed = 0;
+bool dataSaveFlag = false;
 //DHT temperature and humidity sensor instence
 DHT_Unified dht(DHTPIN, DHTTYPE);
 uint32_t delayMS;
+float actualTemp = 0;
 //period related variables
-unsigned long currTime = millis();
-unsigned long prevTime = 0;
+//unsigned long currTime = millis();
+unsigned long prevTimeSerial = 0;
+unsigned long prevTimeDHT = 0;
+unsigned long prevTimeEEPROM = 0;
 //Define functions
 void reciveSerialData(bool *enable, char *recivedData);
 bool waitForUserInputTimeout(bool *enable);
 int changeFanSpeed(int speed);
+void buttonSpeedChangeHandler();
 void serialWriteHelp();
-bool asyncPeriodBool(unsigned long period);
+bool asyncPeriodBool(unsigned long period, unsigned long *prevTime);
 void blinkLED(byte numBlinks, int onOffTime);
-void DHTinfo();
+void DHTinit();
 float DHTGetTemp();
-//---
-
+//-----------------------------------------
 void setup()
 {
   //Set pin modes
@@ -47,8 +53,6 @@ void setup()
   pinMode(FAN_PWM, PWM);
   pinMode(BUTTON, INPUT_PULLDOWN);
   pinMode(ANALOG_IN, INPUT);
-  //DHT init
-  dht.begin();
   //serial init
   Serial.begin(115200); //serial baud
   Serial.setTimeout(10);
@@ -56,31 +60,31 @@ void setup()
   Serial.print("Arduino READY\n");
   serialWriteHelp();
   //DHT info + set minimum delay time
-  DHTinfo();
+  DHTinit();
   //Init LED confirmation
   blinkLED(5, 100);
-  digitalWrite(LED_PIN, HIGH);
-  actualFanSpeed = changeFanSpeed(40);
+  changeFanSpeed(actualFanSpeed);
 }
 
 void loop()
 {
-  pwmWrite(FAN_PWM, pwmFanSpeed);   
-  //---------------------------------------------------
-  if(buttonValue == LOW && digitalRead(BUTTON) == HIGH){      //Button click with positive edge - move to function
-    Serial.println("Button clicked!\n");delay(10);
-    actualFanSpeed = changeFanSpeed(actualFanSpeed + 10);
-  }
-  buttonValue = digitalRead(BUTTON);
-
-  //---------------------------------------------------
-  if(asyncPeriodBool(delayMS)){
-    actualTemp = DHTGetTemp();
-    Serial.println(actualTemp);delay(10);
-  }
-  //---------------------------------------------------
-  reciveSerialData(&enable, recivedData);
+  //Write PWM fan speed--------------------------------
   
+  pwmWrite(FAN_PWM, pwmFanSpeed);   
+  
+  //Change speed via button, EEPROM speed save------------------------
+  
+  buttonSpeedChangeHandler();
+  
+  //Assign actual temperature--------------------------
+  
+  if(asyncPeriodBool(delayMS, &prevTimeDHT)){
+    actualTemp = DHTGetTemp();
+    //Serial.println(actualTemp);delay(10);
+  }
+
+  //Serial data readout--------------------------------
+  reciveSerialData(&enable, recivedData);
   if (recivedData[0] == 'H' || recivedData[0] == 'h')
   {
     serialWriteHelp();
@@ -89,10 +93,15 @@ void loop()
   {
     changeFanSpeed(atoi(recivedData + 1)); //recivedData + 1 = same string witout first character
   }
+  else if (recivedData[0] == 'T' || recivedData[0] == 't')
+  {
+    Serial.print(actualTemp); Serial.print(" °C\n"); delay(10); // print actual temperature
+  }
   
   if (recivedData[0] != 0)
     Serial.println(recivedData);
   memset(recivedData, 0, sizeof(*recivedData));
+
 }
 
 void reciveSerialData(bool *enable, char *recivedData)
@@ -148,10 +157,10 @@ void reciveSerialData(bool *enable, char *recivedData)
 bool waitForUserInputTimeout(bool *enable)
 {
   int timeout = 1;
-  prevTime = millis();
+  prevTimeSerial = millis();
   while (Serial.available() == 0 && *enable) //w8 for serial data
   {
-    if (asyncPeriodBool(5000))
+    if (asyncPeriodBool(5000, &prevTimeSerial))
     {
       Serial.print("Wait for user input... Retry:");
       Serial.println(timeout);
@@ -172,32 +181,73 @@ int changeFanSpeed(int speed)
   if(speed > 100)
     tempSpeed = 0;
   else if(speed < 0)
-    tempSpeed = 0;
-
-  Serial.print("Speed was changed to: ");
-  Serial.print(tempSpeed, DEC);
-  Serial.print("%.\n");
+    tempSpeed = 100;
+  // Serial.print("Speed was changed to: ");
+  // Serial.print(tempSpeed, DEC);
+  // Serial.print("%.\n");
   pwmFanSpeed = map(tempSpeed, 0, 100, 0, 65535);
   return tempSpeed;
+}
+
+void buttonSpeedChangeHandler()
+{
+  //Speed change after button click and seting it to 100%-
+  if(changeFanSpeedFlag){
+    actualFanSpeed = changeFanSpeed(actualFanSpeed + 10);
+    if(actualFanSpeed < 100 && actualFanSpeed != 50)
+      blinkLED(1,200);
+    if(actualFanSpeed == 50)
+      blinkLED(2,100);
+    if(actualFanSpeed == 100)
+      blinkLED(3,66);
+    Serial.print("Speed was changed to: ");
+    Serial.print(actualFanSpeed, DEC);
+    Serial.print("%.\n");
+    changeFanSpeedFlag = false;
+    dataSaveFlag = true;
+  }
+  //Button click with positive edge---------------------
+  if(buttonValue == LOW && digitalRead(BUTTON) == HIGH && !changeFanSpeedFlag){
+    changeFanSpeed(100);      //Set speed to 100 for few miliseconds to get fan into speed
+    delay(100);
+    changeFanSpeedFlag = true;      //flag to change speed of fan from 100 to proper speed
+  }
+  buttonValue = digitalRead(BUTTON);
+  
+  //Save data after 20s aftes change speed-------------
+  
+  if(dataSaveFlag && actualFanSpeed != savedFanSpeed){
+    if(asyncPeriodBool(20000, &prevTimeEEPROM)){
+      //EEPROM.update(0, actualFanSpeed);   //-----------------------------------------------------Uncomment to activate EEPROM speed save
+      Serial.println("DataSaved\n");delay(10);
+      dataSaveFlag = false;
+    }
+  }
+  else
+  {
+    prevTimeEEPROM = millis();
+  }
+
 }
 
 void serialWriteHelp()
 {
   Serial.print("To send message via Serial port:\n"); delay(10);
-  Serial.print("\t1. Write header: \"<--\" to serial buffer\n"); delay(10);
+  Serial.print("\t1. Write header: \"```\" (3 x tylda key) to serial buffer\n"); delay(10);
   Serial.print("\t2. Send date within 15 seconds window between characters\n"); delay(10);
   Serial.print("\t3. End data stream by sending \\n characters aka [ENTER]\n"); delay(10);
   Serial.print("Serial comands:\n"); delay(10);
   Serial.print("\t1. Send HEADER + \"H\" - brings up this message\n"); delay(10);
-  Serial.print("\t2. Send HEADER + \"S + Speed\" [0-100] - sets fan speed\n\n"); delay(10);
+  Serial.print("\t2. Send HEADER + \"S + Speed\" [0-100] - sets fan speed\n"); delay(10);
+  Serial.print("\t3. Send HEADER + \"T\" - print actual temperature value in °C.\n"); delay(10);
 }
 
-bool asyncPeriodBool(unsigned long period)
+bool asyncPeriodBool(unsigned long period, unsigned long *prevTime)
 {
-  currTime = millis();
-  if (currTime - prevTime >= period)
+  unsigned long currTime = millis();
+  if (currTime - *prevTime >= period)
   {
-    prevTime = currTime;
+    *prevTime = currTime;
     return true;
   }
   else
@@ -214,11 +264,16 @@ void blinkLED(byte numBlinks, int onOffTime)
     delay(onOffTime);
     digitalWrite(LED_PIN, LOW);
     delay(onOffTime);
+
   }
 }
 
-void DHTinfo()
+void DHTinit()
 {
+  //DHT init
+  dht.begin();
+  delay(1000);
+
   Serial.print(F("DHTxx Unified Sensor Example\n"));
   // Print temperature sensor details.
   sensor_t sensor;
